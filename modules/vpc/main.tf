@@ -13,6 +13,19 @@ resource "aws_vpc" "vpc" {
   }
 }
 
+# resource "aws_subnet" "subnets" {
+#   for_each = var.subnets
+#
+#   vpc_id                  = aws_vpc.vpc.id
+#   cidr_block              = each.value.cidr_block
+#   map_public_ip_on_launch = each.value.map_public_ip_on_launch
+#   availability_zone       = each.value.availability_zone
+#
+#   tags = {
+#     Name = "${var.environment}-${each.value.subnet_id}-Sub-${each.value.subnet_number}${each.value.az_id}"
+#   }
+# }
+
 resource "aws_subnet" "public_subnets" {
   for_each = local.subnet_groups
 
@@ -42,7 +55,7 @@ resource "aws_subnet" "mgmt_subnets" {
   for_each = local.subnet_groups
 
   vpc_id            = aws_vpc.vpc.id
-  cidr_block        = var.mgmt_subnets_cidr[each.key - 1]
+  cidr_block        = try(var.mgmt_subnets_cidr[each.key - 1], null)
   availability_zone = each.value
 
   tags = {
@@ -84,7 +97,7 @@ resource "aws_route_table" "public_rt" {
 }
 
 resource "aws_route_table_association" "public_assoc" {
-  for_each       = aws_subnet.public_subnets
+  for_each = aws_subnet.public_subnets
 
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public_rt.id
@@ -122,18 +135,54 @@ resource "aws_route_table" "private_rt" {
   }
 }
 
+resource "aws_route_table" "db_rt" {
+  vpc_id = aws_vpc.vpc.id
+
+  lifecycle {
+    ignore_changes = all
+  }
+
+  tags = {
+    Name = "${var.environment}-DB-RT"
+  }
+}
+
+resource "aws_route_table" "mgmt_rt" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat.id
+  }
+
+  lifecycle {
+    ignore_changes = all
+  }
+
+  tags = {
+    Name = "${var.environment}-MGMT-RT"
+  }
+}
+
 resource "aws_route_table_association" "private_assoc" {
-  for_each       = aws_subnet.private_subnets
+  for_each = aws_subnet.private_subnets
 
   subnet_id      = each.value.id
   route_table_id = aws_route_table.private_rt.id
 }
 
-resource "aws_route_table_association" "db_assoc" {
-  for_each       = aws_subnet.db_subnets
+resource "aws_route_table_association" "mgmt_assoc" {
+  for_each = aws_subnet.mgmt_subnets
 
   subnet_id      = each.value.id
-  route_table_id = aws_route_table.private_rt.id
+  route_table_id = aws_route_table.mgmt_rt.id
+}
+
+resource "aws_route_table_association" "db_assoc" {
+  for_each = aws_subnet.db_subnets
+
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.db_rt.id
 }
 
 

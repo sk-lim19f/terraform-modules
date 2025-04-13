@@ -1,29 +1,41 @@
 variable "vpc_cidr" {
-  type        = string
+  type = string
 }
 
+# variable "subnets" {
+#   type = map(object({
+#     cidr_block              = string
+#     map_public_ip_on_launch = bool
+#     availability_zone       = string
+#
+#     subnet_id     = string
+#     subnet_number = number
+#     az_id         = string
+#   }))
+# }
+
 variable "public_subnets_cidr" {
-  type        = list(string)
+  type = list(string)
 }
 
 variable "private_subnets_cidr" {
-  type        = list(string)
+  type = list(string)
 }
 
 variable "db_subnets_cidr" {
-  type        = list(string)
+  type = list(string)
 }
 
 variable "mgmt_subnets_cidr" {
-  type        = list(string)
+  type = list(string)
 }
 
 variable "availability_zones" {
-  type        = map(string)
+  type = map(string)
 }
 
 variable "environment" {
-  type        = string
+  type = string
 }
 
 # variable "vpn_gateway_tag_name" {

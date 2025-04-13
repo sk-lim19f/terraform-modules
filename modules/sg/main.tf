@@ -2,7 +2,7 @@ resource "aws_security_group" "sg" {
   for_each = var.sg_configs
 
   name = join("-", compact([
-    var.environment,
+    try(var.environment, null),
     lookup(each.value, "product", ""),
     lookup(each.value, "service", ""),
     lookup(each.value, "resource", "ec2"),

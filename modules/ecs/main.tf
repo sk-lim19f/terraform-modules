@@ -1,24 +1,11 @@
-resource "awscc_ecr_repository" "ecr" {
-  repository_name      = "api-server"
-  image_tag_mutability = "IMMUTABLE"
-
-  image_scanning_configuration = {
-    scan_on_push = true
-  }
-
-  lifecycle {
-    ignore_changes = all
-  }
-}
-
 resource "aws_ecs_cluster" "ecs_cluster" {
   for_each = var.ecs_clusters
 
-  name     = "${var.environment}-${each.value.product}-Cluster"
+  name = "${var.environment}-${each.value.product}-Cluster"
 }
 
 resource "aws_ecs_task_definition" "ecs_task_definitions" {
-  for_each                 = var.ecs_task_definitions
+  for_each = var.ecs_task_definitions
 
   family                   = "${var.environment}-${each.value.product}-${each.value.service}-Task"
   network_mode             = "awsvpc"
@@ -84,10 +71,17 @@ resource "aws_ecs_task_definition" "ecs_task_definitions" {
       ]
     }
   ])
+
+  # Task Definitions 에 변동이 없을 경우 사용
+  # lifecycle {
+  #   ignore_changes = [
+  #     container_definitions,
+  #   ]
+  # }
 }
 
 resource "aws_ecs_task_definition" "ecs_task_definitions_fargate" {
-  for_each                 = var.ecs_task_definitions_fargate
+  for_each = var.ecs_task_definitions_fargate
 
   family                   = "${var.environment}-${each.value.product}-${each.value.service}-Task"
   network_mode             = "awsvpc"
@@ -164,12 +158,18 @@ resource "aws_ecs_task_definition" "ecs_task_definitions_fargate" {
 }
 
 resource "aws_ecs_service" "ecs_service" {
-  for_each        = var.ecs_services
+  for_each = var.ecs_services
 
-  name            = "${var.environment}-${each.value.product}-${each.value.service}-Service"
-  cluster         = aws_ecs_cluster.ecs_cluster[each.value.cluster_name].id
-  task_definition = aws_ecs_task_definition.ecs_task_definitions[each.value.task_definition_family].arn
-  desired_count   = each.value.desired_count
+  name                               = "${var.environment}-${each.value.product}-${each.value.service}-Service"
+  cluster                            = aws_ecs_cluster.ecs_cluster[each.value.cluster_name].id
+  task_definition                    = aws_ecs_task_definition.ecs_task_definitions[each.value.task_definition_family].arn
+  desired_count                      = each.value.desired_count
+  deployment_minimum_healthy_percent = try(each.value.minimum_healthy_percent, null)
+
+  deployment_circuit_breaker {
+    enable   = try(each.value.deployment_circuit_breaker.enable, false)
+    rollback = try(each.value.deployment_circuit_breaker.rollback, false)
+  }
 
   dynamic "capacity_provider_strategy" {
     for_each = each.value.capacity_provider_strategy != null ? [each.value.capacity_provider_strategy] : []
@@ -197,19 +197,43 @@ resource "aws_ecs_service" "ecs_service" {
     }
   }
 
+  dynamic "service_registries" {
+    for_each = each.value.service_registries != null ? [each.value.service_registries] : []
+
+    content {
+      registry_arn = service_registries.value.registry_arn
+    }
+  }
+
   depends_on = [
     aws_ecs_capacity_provider.ecs_capacity_provider
   ]
+
+  lifecycle {
+    ignore_changes = [
+      task_definition,
+    ]
+  }
 }
 
 resource "aws_launch_template" "ecs_launch_template" {
   for_each = var.ecs_launch_template
 
-  name          = "${var.environment}-${each.value.product}-Launch-Template"
-  image_id      = each.value.ami_name
-  instance_type = each.value.instance_type
-  key_name      = each.value.key_pair
-  vpc_security_group_ids = each.value.ec2_security_groups
+  name                   = "${var.environment}-${each.value.name}-Launch-Template"
+  image_id               = each.value.ami_name
+  instance_type          = each.value.instance_type
+  key_name               = each.value.key_pair
+  update_default_version = true
+  vpc_security_group_ids = try(each.value.vpc_security_group_ids, null)
+
+  dynamic "network_interfaces" {
+    for_each = each.value.network_interfaces != null ? [each.value.network_interfaces] : []
+
+    content {
+      subnet_id       = network_interfaces.value.subnet_id
+      security_groups = try(each.value.ec2_security_groups, null)
+    }
+  }
 
   iam_instance_profile {
     name = each.value.instance_profile_name
@@ -237,13 +261,13 @@ resource "aws_launch_template" "ecs_launch_template" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "${var.environment}-EC2"
+      Name = "${var.environment}-${each.value.product}-EC2"
     }
   }
 }
 
 resource "aws_autoscaling_group" "ecs_instance" {
-  for_each            = var.asg_configs
+  for_each = var.asg_configs
 
   name                = "${var.environment}-${each.value.product}-ASG"
   desired_capacity    = each.value.desired_capacity
@@ -315,10 +339,13 @@ resource "aws_ecs_cluster_capacity_providers" "ecs_cluster_provider" {
     for provider_name in each.value.capacity_providers : aws_ecs_capacity_provider.ecs_capacity_provider[provider_name].name
   ]
 
-  default_capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.ecs_capacity_provider[each.value.default_strategy.capacity_provider].name
-    weight            = each.value.default_strategy.weight
-    base              = each.value.default_strategy.base
+  dynamic "default_capacity_provider_strategy" {
+    for_each = each.value.default_strategy
+    content {
+      capacity_provider = aws_ecs_capacity_provider.ecs_capacity_provider[default_capacity_provider_strategy.value.capacity_provider].name
+      weight            = default_capacity_provider_strategy.value.weight
+      base              = default_capacity_provider_strategy.value.base
+    }
   }
 
   depends_on = [

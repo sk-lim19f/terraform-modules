@@ -1,5 +1,5 @@
 variable "environment" {
-  type        = string
+  type = string
 }
 
 variable "ecs_clusters" {
@@ -119,12 +119,18 @@ variable "ecs_task_definitions_fargate" {
 
 variable "ecs_services" {
   type = map(object({
-    product                = string
-    service                = string
-    cluster_name           = string
-    task_definition_family = string
-    desired_count          = number
-    capacity_provider_name = string
+    product                 = string
+    service                 = string
+    cluster_name            = string
+    task_definition_family  = string
+    desired_count           = number
+    capacity_provider_name  = string
+    minimum_healthy_percent = optional(number)
+
+    deployment_circuit_breaker = optional(object({
+      enable   = bool
+      rollback = bool
+    }))
 
     capacity_provider_strategy = optional(object({
       weight = number
@@ -141,16 +147,27 @@ variable "ecs_services" {
       container_name   = string
       container_port   = number
     })))
+
+    service_registries = optional(object({
+      registry_arn = optional(string)
+    }))
   }))
 }
 
 variable "ecs_launch_template" {
   type = map(object({
-    product               = string
-    ami_name              = string
-    instance_type         = string
-    key_pair              = string
-    ec2_security_groups   = list(string)
+    product                = string
+    name                   = string
+    ami_name               = string
+    instance_type          = string
+    key_pair               = string
+    ec2_security_groups    = optional(list(string))
+    vpc_security_group_ids = optional(list(string))
+
+    network_interfaces = optional(object({
+      subnet_id = string
+    }))
+
     instance_profile_name = string
     user_data_sh          = string
     cluster_name          = string
@@ -183,18 +200,18 @@ variable "ecs_cluster_capacity_providers" {
   type = map(object({
     cluster_name       = string
     capacity_providers = list(string)
-    default_strategy = object({
+    default_strategy = list(object({
       capacity_provider = string
       weight            = number
       base              = number
-    })
+    }))
   }))
 }
 
 variable "ops_apm_alb_dns" {
-  type        = string
+  type = string
 }
 
 variable "ops_efs_id" {
-  type        = string
+  type = string
 }

@@ -1,11 +1,29 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "5.54.1"
+    }
+  }
+}
 resource "aws_s3_bucket" "bucket" {
   for_each = var.s3_buckets
 
-  bucket        = lower("${var.environment}-${each.value.product}-${each.value.service}-s3")
+  bucket = lower(join("-", compact([
+    try(var.environment, ""),
+    lookup(each.value, "product", ""),
+    lookup(each.value, "service", ""),
+    "s3"
+  ])))
   force_destroy = true
 
   tags = {
-    Name    = lower("${var.environment}-${each.value.product}-${each.value.service}-s3")
+    Name = lower(join("-", compact([
+      var.environment,
+      lookup(each.value, "product", ""),
+      lookup(each.value, "service", ""),
+      "s3"
+    ])))
     ENV     = var.environment
     Product = each.value.product
     Service = each.value.service
@@ -63,3 +81,25 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "encryption" {
     }
   }
 }
+
+resource "aws_s3_bucket_website_configuration" "s3_bucket_website_configuration" {
+  for_each = var.s3_bucket_website_configuration
+
+  bucket = aws_s3_bucket.bucket[each.value.bucket_key].bucket
+
+  index_document {
+    suffix = each.value.index_document.value
+  }
+
+  error_document {
+    key = each.value.error_document.value
+  }
+}
+
+resource "aws_s3_bucket_policy" "s3_bucket_policy" {
+  for_each = var.s3_bucket_policy
+
+  bucket = aws_s3_bucket.bucket[each.value.bucket_key].id
+  policy = each.value.policy
+}
+

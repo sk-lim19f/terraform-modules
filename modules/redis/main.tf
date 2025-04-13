@@ -21,12 +21,14 @@ resource "aws_elasticache_replication_group" "redis" {
   num_cache_clusters          = each.value.num_cache_clusters
   num_node_groups             = each.value.num_node_groups
   cluster_mode                = each.value.cluster_mode
+  replicas_per_node_group     = each.value.replicas_per_node_group
+  multi_az_enabled            = try(each.value.multi_az_enabled, false)
   engine                      = "redis"
   engine_version              = each.value.engine_version
   parameter_group_name        = try(each.value.parameter_group_name, null)
   port                        = try(each.value.port, null)
   subnet_group_name           = aws_elasticache_subnet_group.redis_subnet_group[each.value.subnet_group_key].name
-  preferred_cache_cluster_azs = ["ap-northeast-2c"]
+  preferred_cache_cluster_azs = each.value.preferred_cache_cluster_azs
   security_group_ids          = each.value.security_group_ids
   automatic_failover_enabled  = each.value.automatic_failover_enabled # dev: false
   at_rest_encryption_enabled  = true

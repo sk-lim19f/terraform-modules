@@ -1,5 +1,5 @@
 variable "vpc_id" {
-  type        = string
+  type = string
 }
 
 variable "sg_configs" {
@@ -24,5 +24,5 @@ variable "sg_rules" {
 }
 
 variable "environment" {
-  type        = string
+  type = string
 }
